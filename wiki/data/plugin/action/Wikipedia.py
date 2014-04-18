@@ -34,17 +34,20 @@ class Wikipedia(ActionBase):
         self.method = 'POST'
         self.enctype = 'multipart/form-data'
 
-    def __getWikipedia(self, language, article):
+    def getWikipedia(self, language, article):
         params = { "format":"xml", "action":"query", "prop":"revisions", "rvprop":"timestamp|user|comment|content" }
         params["titles"] = "%s" % urllib.quote(article.encode("utf8"))
         qs = "&".join("%s=%s" % (k, v)  for k, v in params.items())
         url = "http://%s.wikipedia.org/w/api.php?%s" % (language, qs, )
-        tree = lxml.etree.parse(urllib.urlopen(url))
+        try:
+            tree = lxml.etree.parse(urllib.urlopen(url))
+        except:
+            return 1
         revs = tree.xpath('//rev')
         if revs:
             return revs[-1].text
         else:
-            return -1
+            return 2
 
     def do_action(self):
         """ Load """
@@ -62,13 +65,12 @@ class Wikipedia(ActionBase):
         comment = wikiutil.clean_input(comment)
 
         article = form.get('article',u'')
+        if not article:
+            return False, _("No article name submited, try again.")
         article = wikiutil.clean_input(article)
 
         language = form.get('language',u'')
         language = wikiutil.clean_input(language)
-
-        if not article:
-            return False, _("No article name submited, try again.")
 
         rename = form.get('rename', '').strip()
         if rename:
@@ -79,10 +81,12 @@ class Wikipedia(ActionBase):
         target = wikiutil.clean_input(target)
 
         if target:
-            content = self.__getWikipedia(language,article)
-
-            if not content:
-                    return False, _("Article not found.")
+            content = self.getWikipedia(language,article)
+            # check for errors
+            if content == 1:
+                return False, _("Network Error.")
+            elif content == 2:
+                return False, _("Article not found.")
             else:
                 content = wikiutil.decodeUnknownInput(content)
 
